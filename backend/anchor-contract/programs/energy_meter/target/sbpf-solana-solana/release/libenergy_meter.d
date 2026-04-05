@@ -1,0 +1,1 @@
+/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/sbpf-solana-solana/release/libenergy_meter.rlib: /mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/src/lib.rs

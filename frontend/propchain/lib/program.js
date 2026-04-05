@@ -30,7 +30,9 @@ export function getProgram(connection, wallet) {
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
   });
-  return new Program(idl, PROGRAM_ID, provider);
+  // Anchor 0.30+ requires programId to come from idl.address; inject it at runtime
+  const idlWithAddress = { ...idl, address: PROGRAM_ID.toBase58() };
+  return new Program(idlWithAddress, provider);
 }
 
 // ── Read on-chain data ──────────────────────────────────────────────────────

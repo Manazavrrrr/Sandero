@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("EMtr1111111111111111111111111111111111111111");
+declare_id!("Cafya3JiUuZ7Via65X8D69JZemzjd1PE2RjEDKha8EbW");
 
 #[program]
 pub mod energy_meter {
@@ -24,8 +24,6 @@ pub mod energy_meter {
         config.admin = ctx.accounts.admin.key();
         config.oracle = oracle;
         config.tariff_usdc_per_power = tariff_usdc_per_power;
-        config.usdc_mint = ctx.accounts.usdc_mint.key();
-        config.service_vault = ctx.accounts.service_vault.key();
         config.bump = ctx.bumps.global_config;
 
         msg!(

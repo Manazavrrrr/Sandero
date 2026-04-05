@@ -1,0 +1,14 @@
+/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/deps/serde-165c5961bfecf7ff.d: /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/build/serde-dca6ca4e3ffc6e04/out/private.rs
+
+/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/deps/libserde-165c5961bfecf7ff.rlib: /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/build/serde-dca6ca4e3ffc6e04/out/private.rs
+
+/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/deps/libserde-165c5961bfecf7ff.rmeta: /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/build/serde-dca6ca4e3ffc6e04/out/private.rs
+
+/home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/deida/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/build/serde-dca6ca4e3ffc6e04/out/private.rs:
+
+# env-dep:OUT_DIR=/mnt/c/Users/deida/Sandero/backend/anchor-contract/programs/energy_meter/target/debug/build/serde-dca6ca4e3ffc6e04/out

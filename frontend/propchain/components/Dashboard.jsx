@@ -120,6 +120,10 @@ export default function PropChainDashboard() {
   const wallet = useWallet();
   const { publicKey, connected, disconnect } = wallet;
 
+  // Prevent SSR/client hydration mismatch for wallet UI
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Auth / role
   const [role, setRole] = useState(null);
 
@@ -369,16 +373,18 @@ export default function PropChainDashboard() {
 
             {!connected ? (
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-                <WalletMultiButton
-                  style={{
-                    background: "linear-gradient(135deg, #7c5cfc, #00e5a0)",
-                    borderRadius: 12,
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    padding: "14px 28px",
-                  }}
-                />
+                {mounted && (
+                  <WalletMultiButton
+                    style={{
+                      background: "linear-gradient(135deg, #7c5cfc, #00e5a0)",
+                      borderRadius: 12,
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      padding: "14px 28px",
+                    }}
+                  />
+                )}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
