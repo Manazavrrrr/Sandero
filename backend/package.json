@@ -1,0 +1,24 @@
+{
+  "name": "smart-meter-solana",
+  "version": "1.0.0",
+  "description": "Smart meter emulator with Solana blockchain integration",
+  "scripts": {
+    "init-meter": "ts-node scripts/init_meter.ts",
+    "update-meter": "ts-node scripts/update_meter.ts",
+    "test": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.0",
+    "@solana/web3.js": "^1.95.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "chai": "^4.3.10",
+    "mocha": "^10.0.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}

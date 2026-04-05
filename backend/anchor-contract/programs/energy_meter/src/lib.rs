@@ -1,0 +1,398 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+
+declare_id!("EMtr1111111111111111111111111111111111111111");
+
+#[program]
+pub mod energy_meter {
+    use super::*;
+
+    // ── Admin: создание глобальной конфигурации ─────────────────────────────
+    /// Инициализирует глобальный конфиг системы.
+    /// Вызывается один раз администратором при деплое.
+    ///
+    /// * `tariff_usdc_per_power` — цена за 1 единицу $POWER в USDC (6 decimals).
+    ///   Например, 500_000 = 0.50 USDC за единицу.
+    /// * `oracle` — публичный ключ Oracle-кошелька (C++ счётчик),
+    ///   который будет авторизован для вызова `record_consumption`.
+    pub fn initialize_config(
+        ctx: Context<InitializeConfig>,
+        tariff_usdc_per_power: u64,
+        oracle: Pubkey,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.global_config;
+        config.admin = ctx.accounts.admin.key();
+        config.oracle = oracle;
+        config.tariff_usdc_per_power = tariff_usdc_per_power;
+        config.usdc_mint = ctx.accounts.usdc_mint.key();
+        config.service_vault = ctx.accounts.service_vault.key();
+        config.bump = ctx.bumps.global_config;
+
+        msg!(
+            "GlobalConfig initialized: admin={}, oracle={}, tariff={}",
+            config.admin,
+            config.oracle,
+            config.tariff_usdc_per_power
+        );
+        Ok(())
+    }
+
+    // ── Admin: обновление тарифа ────────────────────────────────────────────
+    /// Позволяет администратору изменить тариф без переинициализации.
+    pub fn update_tariff(
+        ctx: Context<UpdateTariff>,
+        new_tariff_usdc_per_power: u64,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.global_config;
+        config.tariff_usdc_per_power = new_tariff_usdc_per_power;
+
+        msg!("Tariff updated to {}", new_tariff_usdc_per_power);
+        Ok(())
+    }
+
+    // ── Инициализация квартиры ───────────────────────────────────────────────
+    /// Создаёт аккаунт квартиры, привязывая к нему инвестора (owner) и жильца (tenant).
+    ///
+    /// * `device_id` — уникальный ID счётчика (используется как seed для PDA).
+    /// * `owner` — pubkey инвестора, которому будет приходить 95% оплаты.
+    /// * `tenant` — pubkey жильца, который будет оплачивать коммунальные.
+    ///
+    /// PDA рассчитывается из seeds: ["apartment", device_id].
+    /// Это гарантирует, что один счётчик -> одна квартира.
+    pub fn initialize_apartment(
+        ctx: Context<InitializeApartment>,
+        device_id: String,
+        owner: Pubkey,
+        tenant: Pubkey,
+    ) -> Result<()> {
+        let apartment = &mut ctx.accounts.apartment;
+        apartment.device_id = device_id;
+        apartment.owner_pubkey = owner;
+        apartment.tenant_pubkey = tenant;
+        apartment.accumulated_power = 0;
+        apartment.unpaid_balance_usdc = 0;
+        apartment.bump = ctx.bumps.apartment;
+
+        msg!(
+            "Apartment {} initialized: owner={}, tenant={}",
+            apartment.device_id,
+            owner,
+            tenant
+        );
+        Ok(())
+    }
+
+    // ── Oracle: запись потребления ───────────────────────────────────────────
+    /// Вызывается C++ Oracle (внешним счётчиком) для записи потребления энергии.
+    ///
+    /// Процесс взаимодействия с C++ оракулом:
+    /// 1. Физический счётчик (C++ программа) считывает показания через UART/Modbus.
+    /// 2. C++ программа формирует Solana-транзакцию и подписывает её Oracle-кошельком.
+    /// 3. Транзакция вызывает эту инструкцию с количеством потреблённой энергии.
+    /// 4. Контракт прибавляет `amount` к `accumulated_power` и пересчитывает долг.
+    ///
+    /// Формула расчёта долга:
+    ///   unpaid_balance_usdc += amount * tariff_usdc_per_power
+    ///
+    /// Безопасность:
+    /// - Только Oracle-кошелёк, указанный в GlobalConfig, может вызвать эту функцию.
+    /// - Используется checked-арифметика для защиты от переполнения u64.
+    pub fn record_consumption(
+        ctx: Context<RecordConsumption>,
+        amount: u64,
+    ) -> Result<()> {
+        require!(amount > 0, EnergyError::ZeroConsumption);
+
+        let config = &ctx.accounts.global_config;
+        let apartment = &mut ctx.accounts.apartment;
+
+        // checked_add: защита от переполнения accumulated_power
+        apartment.accumulated_power = apartment
+            .accumulated_power
+            .checked_add(amount)
+            .ok_or(EnergyError::Overflow)?;
+
+        // checked_mul + checked_add: защита от переполнения при расчёте долга
+        let charge = amount
+            .checked_mul(config.tariff_usdc_per_power)
+            .ok_or(EnergyError::Overflow)?;
+
+        apartment.unpaid_balance_usdc = apartment
+            .unpaid_balance_usdc
+            .checked_add(charge)
+            .ok_or(EnergyError::Overflow)?;
+
+        msg!(
+            "Consumption recorded: +{} POWER, charge={} USDC, total_debt={}",
+            amount,
+            charge,
+            apartment.unpaid_balance_usdc
+        );
+        Ok(())
+    }
+
+    // ── Tenant: оплата коммунальных ─────────────────────────────────────────
+    /// Инструкция для жильца: оплата накопленного долга в USDC.
+    ///
+    /// Логика распределения:
+    /// - 95% от суммы переводится инвестору (owner_pubkey) — его доход.
+    /// - 5% остаётся на ATA контракта (service_vault) — комиссия сервиса.
+    ///
+    /// Жилец может оплатить частично (amount <= unpaid_balance_usdc).
+    ///
+    /// Все переводы осуществляются через SPL Token (USDC).
+    /// Контракт подписывает перевод из service_vault через PDA-подпись.
+    pub fn pay_utilities(ctx: Context<PayUtilities>, amount: u64) -> Result<()> {
+        require!(amount > 0, EnergyError::ZeroPayment);
+
+        let apartment = &mut ctx.accounts.apartment;
+
+        require!(
+            amount <= apartment.unpaid_balance_usdc,
+            EnergyError::OverPayment
+        );
+
+        // Рассчитываем распределение: 95% инвестору, 5% комиссия
+        let owner_share = amount
+            .checked_mul(95)
+            .ok_or(EnergyError::Overflow)?
+            .checked_div(100)
+            .ok_or(EnergyError::Overflow)?;
+        let service_fee = amount
+            .checked_sub(owner_share)
+            .ok_or(EnergyError::Overflow)?;
+
+        // 1) Перевод от жильца -> инвестору (95%)
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.tenant_usdc.to_account_info(),
+                    to: ctx.accounts.owner_usdc.to_account_info(),
+                    authority: ctx.accounts.tenant.to_account_info(),
+                },
+            ),
+            owner_share,
+        )?;
+
+        // 2) Перевод от жильца -> сервисный кошелёк (5%)
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.tenant_usdc.to_account_info(),
+                    to: ctx.accounts.service_vault.to_account_info(),
+                    authority: ctx.accounts.tenant.to_account_info(),
+                },
+            ),
+            service_fee,
+        )?;
+
+        // Уменьшаем долг
+        apartment.unpaid_balance_usdc = apartment
+            .unpaid_balance_usdc
+            .checked_sub(amount)
+            .ok_or(EnergyError::Overflow)?;
+
+        msg!(
+            "Payment: {} USDC (owner={}, fee={}), remaining_debt={}",
+            amount,
+            owner_share,
+            service_fee,
+            apartment.unpaid_balance_usdc
+        );
+        Ok(())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Account Structs (Contexts)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Accounts)]
+pub struct InitializeConfig<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = GlobalConfig::SPACE,
+        seeds = [b"global_config"],
+        bump,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateTariff<'info> {
+    #[account(
+        mut,
+        seeds = [b"global_config"],
+        bump = global_config.bump,
+        has_one = admin @ EnergyError::Unauthorized,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub admin: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(device_id: String)]
+pub struct InitializeApartment<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = Apartment::space(&device_id),
+        seeds = [b"apartment", device_id.as_bytes()],
+        bump,
+    )]
+    pub apartment: Account<'info, Apartment>,
+
+    /// Только администратор может создавать квартиры.
+    #[account(
+        seeds = [b"global_config"],
+        bump = global_config.bump,
+        has_one = admin @ EnergyError::Unauthorized,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RecordConsumption<'info> {
+    #[account(mut)]
+    pub apartment: Account<'info, Apartment>,
+
+    /// Oracle-кошелёк, авторизованный в GlobalConfig.
+    /// C++ счётчик подписывает транзакцию этим ключом.
+    #[account(
+        seeds = [b"global_config"],
+        bump = global_config.bump,
+        constraint = global_config.oracle == oracle.key() @ EnergyError::UnauthorizedOracle,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub oracle: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct PayUtilities<'info> {
+    #[account(
+        mut,
+        constraint = apartment.tenant_pubkey == tenant.key() @ EnergyError::NotTenant,
+    )]
+    pub apartment: Account<'info, Apartment>,
+
+    /// Жилец — подписывает транзакцию и авторизует перевод USDC.
+    pub tenant: Signer<'info>,
+
+    /// USDC-аккаунт жильца (источник средств).
+    #[account(
+        mut,
+        constraint = tenant_usdc.owner == tenant.key() @ EnergyError::TokenAccountMismatch,
+    )]
+    pub tenant_usdc: Account<'info, TokenAccount>,
+
+    /// USDC-аккаунт инвестора (получает 95%).
+    #[account(
+        mut,
+        constraint = owner_usdc.owner == apartment.owner_pubkey @ EnergyError::TokenAccountMismatch,
+    )]
+    pub owner_usdc: Account<'info, TokenAccount>,
+
+    /// Сервисный USDC-кошелёк (получает 5% комиссию).
+    #[account(mut)]
+    pub service_vault: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// State Accounts
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Глобальная конфигурация системы. Один экземпляр на всю программу.
+#[account]
+pub struct GlobalConfig {
+    /// Администратор, имеющий право менять тариф и создавать квартиры.
+    pub admin: Pubkey,           // 32
+    /// Публичный ключ Oracle-кошелька (C++ счётчик).
+    /// Только этот ключ может вызывать `record_consumption`.
+    pub oracle: Pubkey,          // 32
+    /// Цена за 1 единицу $POWER в USDC (6 decimals).
+    /// Пример: 1_000_000 = 1.00 USDC за единицу POWER.
+    pub tariff_usdc_per_power: u64, // 8
+    /// Bump для PDA-деривации.
+    pub bump: u8,                // 1
+}
+
+impl GlobalConfig {
+    pub const SPACE: usize = 8 + 32 + 32 + 8 + 1;
+}
+
+/// Аккаунт квартиры. Привязан к конкретному device_id счётчика.
+#[account]
+pub struct Apartment {
+    /// Уникальный ID устройства-счётчика (совпадает с C++ device_id).
+    pub device_id: String,           // 4 + len
+    /// Инвестор — владелец квартиры, получает 95% оплаты.
+    pub owner_pubkey: Pubkey,        // 32
+    /// Жилец — арендатор, оплачивает коммунальные.
+    pub tenant_pubkey: Pubkey,       // 32
+    /// Суммарное потребление энергии в единицах POWER.
+    pub accumulated_power: u64,      // 8
+    /// Неоплаченный баланс в USDC (6 decimals).
+    pub unpaid_balance_usdc: u64,    // 8
+    /// Bump для PDA.
+    pub bump: u8,                    // 1
+}
+
+impl Apartment {
+    pub fn space(device_id: &str) -> usize {
+        8                            // discriminator
+        + 4 + device_id.len()        // device_id (borsh string)
+        + 32                         // owner_pubkey
+        + 32                         // tenant_pubkey
+        + 8                          // accumulated_power
+        + 8                          // unpaid_balance_usdc
+        + 1                          // bump
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Errors
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[error_code]
+pub enum EnergyError {
+    #[msg("Only the admin can perform this action")]
+    Unauthorized,
+
+    #[msg("Only the authorized Oracle can record consumption")]
+    UnauthorizedOracle,
+
+    #[msg("Only the tenant can pay utilities")]
+    NotTenant,
+
+    #[msg("Payment amount exceeds unpaid balance")]
+    OverPayment,
+
+    #[msg("Amount must be greater than zero")]
+    ZeroConsumption,
+
+    #[msg("Payment must be greater than zero")]
+    ZeroPayment,
+
+    #[msg("Arithmetic overflow")]
+    Overflow,
+
+    #[msg("Token account owner mismatch")]
+    TokenAccountMismatch,
+}
