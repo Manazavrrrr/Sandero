@@ -1,459 +1,459 @@
-<div align="center">
+# PropChain — Decentralized Utility Billing on Solana
 
-# 🏛️ Solana RWA Hub
+Децентрализованная система учёта и оплаты коммунальных услуг на блокчейне Solana.
 
-### Фракционная токенизация реальных активов на скорости света — без посредников, без барьеров.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF?logo=solana)](https://solana.com)
-[![Token-2022](https://img.shields.io/badge/Token%20Standard-Token--2022-14F195)](https://spl.solana.com/token-2022)
-[![Anchor](https://img.shields.io/badge/Framework-Anchor-FF6B35)](https://www.anchor-lang.com/)
-[![Network](https://img.shields.io/badge/Network-Devnet-blue)](https://explorer.solana.com/?cluster=devnet)
-
-</div>
-
----
-
-## 📌 Проблема
-
-Рынок реальных активов — недвижимость, GPU-кластеры, облигации, сырьё — остаётся одним из наименее доступных и наименее ликвидных сегментов мировой экономики. Три фундаментальные проблемы блокируют широкое участие инвесторов:
-
-| Проблема | Последствие |
-|---|---|
-| **Высокий порог входа** | Минимальный чек для инвестиций в недвижимость — сотни тысяч долларов. Рынок закрыт для 99% населения. |
-| **Низкая ликвидность** | Продать долю в активе занимает месяцы. Вторичный рынок фрагментирован или отсутствует. |
-| **Непрозрачность владения** | Цепочки посредников, реестры прав собственности, ручная верификация документов — всё это создаёт поле для мошенничества и ошибок. |
-
-Существующие «решения» — REIT-фонды, краудфандинговые платформы — лишь перемещают проблему на уровень выше, добавляя комиссии посредников и сохраняя централизованный контроль.
-
----
-
-## 💡 Решение: Solana RWA Hub
-
-**Solana RWA Hub** — это on-chain протокол и платформа для фракционной токенизации реальных активов с полным end-to-end потоком: от загрузки юридических документов до P2P-торговли долями на вторичном рынке.
-
-Протокол решает три ключевые проблемы:
-
-- **Порог входа** → Любой актив дробится на тысячи токенов. Инвестиция от $1.
-- **Ликвидность** → Встроенный P2P-маркетплейс обеспечивает мгновенную торговлю долями 24/7.
-- **Прозрачность** → Каждый токен криптографически привязан к юридическим документам через IPFS (Proof-of-Asset). Вся история владения — on-chain.
-
----
-
-## ✨ Ключевые возможности
-
-### 🏗️ RWA Constructor — Конструктор токенизации активов
-
-Интерфейс для эмитентов позволяет токенизировать любой реальный актив за несколько шагов:
-
-- Поддерживаемые классы активов: **Недвижимость**, **GPU-кластеры**, **Облигации**, **Сырьё**
-- Гибкая настройка: количество фракций, цена за долю, минимальный лот
-- Автоматическая загрузка правоустанавливающих документов на IPFS через Pinata
-- Генерация on-chain метаданных токена с CID-хешем документов (Proof-of-Asset)
-
-### 🪙 Token-2022 — Стандарт следующего поколения для RWA
-
-Протокол использует **Token-2022 (Token Extensions Program)**, что даёт критически важные для RWA возможности «из коробки»:
-
-| Расширение | Применение |
-|---|---|
-| `MetadataPointer` + `TokenMetadata` | On-chain хранение имени актива, символа, URI на IPFS-документы |
-| `PermanentDelegate` | Принудительный выкуп или заморозка токена регулятором/эмитентом (compliance) |
-| `TransferHook` | Кастомная логика при каждом трансфере: KYC-проверки, whitelist инвесторов |
-| `NonTransferable` | Токены-сертификаты владения, не подлежащие передаче |
-| `InterestBearingMint` | Начисление процентов on-chain для долговых инструментов |
-
-### 🏪 P2P Marketplace — Децентрализованный вторичный рынок
-
-Эскроу-based торговля фракциями активов без централизованного маркет-мейкера:
-
-- Создание ордеров на продажу с фиксированной ценой
-- Мгновенное атомарное исполнение сделок через Anchor-эскроу
-- История транзакций полностью on-chain
-- Комиссия протокола: настраиваемая (по умолчанию 0.5%)
-
-### 🔗 Decentralized Proof-of-Asset
-
-Верифицируемая связь между физическим активом и его цифровым токеном:
-
-- Эмитент загружает правоустанавливающие документы → Pinata пинит файлы на IPFS → CID хранится в on-chain метаданных токена
-- Любой инвестор может верифицировать документ через IPFS-гейтвей независимо от платформы
-- Immutable: после минтинга URI документа не может быть изменён без on-chain транзакции эмитента
-
----
-
-## 🏛️ Техническая архитектура
+C++ эмулятор умного счётчика считывает показания электроэнергии, записывает их в Solana смарт-контракт (Anchor), а Next.js фронтенд позволяет арендаторам оплачивать счета в USDC и инвесторам отслеживать доход.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND LAYER                           │
-│              Next.js 14 (App Router) + TypeScript               │
-│         Tailwind CSS + shadcn/ui + @solana/wallet-adapter       │
-└───────────────────────┬─────────────────────────────────────────┘
-                        │ RPC calls
-┌───────────────────────▼─────────────────────────────────────────┐
-│                     WEB3 INTEGRATION                            │
-│           @solana/web3.js + @coral-xyz/anchor                   │
-│              Wallet: Phantom / Backpack / Solflare              │
-└───────────┬───────────────────────────────┬─────────────────────┘
-            │ Instructions                  │ Metadata URI
-┌───────────▼───────────┐       ┌───────────▼─────────────────────┐
-│    ON-CHAIN LAYER     │       │         OFF-CHAIN STORAGE        │
-│                       │       │                                  │
-│  Anchor Program (Rust)│       │  IPFS via Pinata                 │
-│  ├─ rwa_constructor   │       │  ├─ Legal documents (PDF)        │
-│  │  └─ mint_asset()  │       │  ├─ Asset metadata (JSON)        │
-│  ├─ marketplace       │       │  └─ Images / certificates        │
-│  │  ├─ list_asset()  │       │                                  │
-│  │  └─ buy_asset()   │       └──────────────────────────────────┘
-│  └─ escrow            │
-│     └─ settle()       │
-│                       │
-│  Token-2022 Program   │
-│  ├─ MetadataPointer   │
-│  ├─ PermanentDelegate │
-│  └─ TransferHook      │
-└───────────────────────┘
-         Solana Devnet
-```
-
-### On-chain: Anchor Program
-
-**Программа состоит из трёх модулей:**
-
-#### 1. `rwa_constructor` — Минтинг токенизированных активов
-
-```rust
-// Основные аккаунты state-машины
-#[account]
-pub struct AssetVault {
-    pub authority: Pubkey,          // Эмитент актива
-    pub mint: Pubkey,               // Mint токена (Token-2022)
-    pub total_fractions: u64,       // Общее количество фракций
-    pub fraction_price: u64,        // Цена фракции в lamports
-    pub ipfs_cid: String,           // CID документов на IPFS (Proof-of-Asset)
-    pub asset_type: AssetType,      // Real Estate | GPU | Bond | Commodity
-    pub is_active: bool,
-    pub bump: u8,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
-pub enum AssetType {
-    RealEstate,
-    GpuCluster,
-    Bond,
-    Commodity,
-}
-```
-
-**Инструкция `initialize_asset`:**
-- Создаёт Mint через Token-2022 Program с расширениями `MetadataPointer` и `PermanentDelegate`
-- Инициализирует on-chain метаданные (название, символ, URI на IPFS)
-- Сохраняет `AssetVault` PDA с параметрами актива и IPFS CID
-
-**Инструкция `mint_fractions`:**
-- Минтит заданное количество fraction-токенов на Associated Token Account эмитента
-- Устанавливает `freeze_authority` для compliance
-
-#### 2. `marketplace` — P2P торговля фракциями
-
-```rust
-#[account]
-pub struct ListingAccount {
-    pub seller: Pubkey,
-    pub asset_vault: Pubkey,
-    pub mint: Pubkey,
-    pub amount: u64,               // Количество фракций в листинге
-    pub price_per_fraction: u64,   // Цена за фракцию в lamports
-    pub escrow_token_account: Pubkey,
-    pub is_active: bool,
-    pub bump: u8,
-}
-```
-
-**Инструкция `list_asset`:**
-- Создаёт `ListingAccount` PDA
-- Переводит токены продавца в эскроу-аккаунт программы (PDA-controlled)
-
-**Инструкция `buy_asset`:**
-- Атомарно: переводит SOL от покупателя продавцу + токены из эскроу покупателю
-- Удаляет `ListingAccount` (rent reclaim)
-
-#### 3. `escrow` — Атомарные расчёты
-
-Эскроу-аккаунт контролируется PDA программы. Ни продавец, ни покупатель не могут вывести активы в обход инструкции `settle()`. Это обеспечивает trustless-торговлю без централизованного custody.
-
-### Off-chain: Next.js Architecture
-
-```
-app/
-├── (auth)/
-│   └── connect/          # Wallet connection flow
-├── dashboard/
-│   ├── portfolio/        # Портфель инвестора (фракции)
-│   └── assets/           # Управление активами эмитента
-├── marketplace/
-│   ├── page.tsx          # Листинг активов
-│   └── [assetId]/        # Детальная страница актива
-├── tokenize/
-│   └── page.tsx          # RWA Constructor (форма минтинга)
-└── api/
-    └── ipfs/
-        └── upload/       # Server Action: загрузка на Pinata
-
-lib/
-├── anchor/
-│   ├── idl.ts            # Сгенерированный IDL Anchor-программы
-│   └── program.ts        # Хелпер инициализации Provider + Program
-├── solana/
-│   ├── token2022.ts      # Хелперы создания Mint с расширениями
-│   └── transactions.ts   # Построение и отправка транзакций
-└── ipfs/
-    └── pinata.ts         # Клиент Pinata SDK
+┌──────────────┐     record_consumption()     ┌──────────────────┐     fetchApartment()     ┌──────────────┐
+│  C++ Smart   │ ──────────────────────────►  │  Solana Program  │  ◄──────────────────────  │   Next.js    │
+│  Meter       │     (Oracle keypair)         │  energy_meter    │     pay_utilities()       │   Frontend   │
+│  Emulator    │                              │  (Anchor/Rust)   │  ──────────────────────►  │  (React)     │
+└──────────────┘                              └──────────────────┘                           └──────────────┘
+     1 tick/sec                                   PDA accounts                                Phantom Wallet
+     ~1500W base                               GlobalConfig, Apartment                      Wallet Adapter
 ```
 
 ---
 
-## 🔄 Пользовательский сценарий
+## Содержание
 
-### Эмитент (Tokenization Flow)
+- [Архитектура](#архитектура)
+- [Структура проекта](#структура-проекта)
+- [Требования](#требования)
+- [Установка и запуск](#установка-и-запуск)
+  - [1. Solana Validator (localnet)](#1-solana-validator-localnet)
+  - [2. Anchor контракт](#2-anchor-контракт)
+  - [3. C++ эмулятор](#3-c-эмулятор)
+  - [4. Next.js фронтенд](#4-nextjs-фронтенд)
+- [Смарт-контракт](#смарт-контракт)
+- [C++ эмулятор](#c-эмулятор-подробно)
+- [Фронтенд](#фронтенд-подробно)
+- [Переменные окружения](#переменные-окружения)
+- [Типичные сценарии](#типичные-сценарии)
+
+---
+
+## Архитектура
+
+### Участники системы
+
+| Роль | Описание |
+|------|----------|
+| **Admin** | Деплоит контракт, создаёт `GlobalConfig`, регистрирует квартиры |
+| **Oracle** | C++ программа с keypair — единственная, кто может вызвать `record_consumption` |
+| **Tenant (Арендатор)** | Подключает Phantom Wallet, видит показания счётчика, оплачивает долг в USDC |
+| **Investor (Инвестор)** | Владелец квартиры, получает 95% от каждой оплаты арендатора |
+
+### Поток данных
+
+1. **C++ эмулятор** тикает каждую секунду, симулируя потребление ~1500W (нормальное распределение + случайные пики).
+2. Каждые N секунд (по умолчанию 10) эмулятор вызывает `record_consumption` в Solana контракте через Oracle-ключ.
+3. Контракт прибавляет потребление к `accumulated_power` и рассчитывает долг: `unpaid_balance_usdc += amount * tariff`.
+4. **Фронтенд** каждые 10 секунд читает `Apartment` PDA и отображает актуальные показания.
+5. Арендатор нажимает "Оплатить" — вызывается `pay_utilities`, USDC переводится: 95% инвестору, 5% сервису.
+
+---
+
+## Структура проекта
 
 ```
-1. Подключить кошелёк (Phantom / Backpack)
-   │
-2. Открыть RWA Constructor
-   │
-3. Заполнить форму актива:
-   │   • Название и описание
-   │   • Тип актива (Real Estate / GPU / Bond)
-   │   • Количество фракций и цена за фракцию
-   │   • Загрузить правоустанавливающие документы (PDF, JPG)
-   │
-4. Документы → Pinata → IPFS → получить CID
-   │
-5. Подписать транзакцию:
-   │   initialize_asset() → Token-2022 Mint создан
-   │   mint_fractions()  → Токены на счёт эмитента
-   │
-6. Создать листинг на маркетплейсе:
-   │   list_asset() → фракции в эскроу
-   │
-✅ Актив токенизирован и доступен инвесторам
-```
-
-### Инвестор (Investment Flow)
-
-```
-1. Подключить кошелёк
-   │
-2. Открыть маркетплейс → browse активов
-   │
-3. Выбрать актив → просмотреть on-chain метаданные
-   │   • Верифицировать документы через IPFS-ссылку (Proof-of-Asset)
-   │   • Проверить историю транзакций on-chain
-   │
-4. Выбрать количество фракций → нажать "Buy"
-   │
-5. Подписать транзакцию:
-   │   buy_asset() → атомарный своп SOL ↔ токены фракций
-   │
-6. Открыть Dashboard → Portfolio:
-   │   • Просмотр всех фракций
-   │   • Sell fractions обратно на маркетплейс
-   │
-✅ Инвестор стал совладельцем реального актива
+проект/
+├── backend/
+│   ├── CMakeLists.txt              # Сборка C++ эмулятора
+│   ├── include/
+│   │   ├── smart_meter.hpp         # Заголовки: SmartMeter, MeterReading, BlockchainConfig
+│   │   └── nlohmann/               # JSON библиотека (header-only)
+│   ├── src/
+│   │   ├── main.cpp                # Точка входа: CLI-парсинг, main loop, синхронизация
+│   │   └── smart_meter.cpp         # Реализация: симуляция, blockchain bridge, PDA
+│   ├── scripts/
+│   │   ├── init_meter.sh           # Bash-обёртка: создание PDA квартиры
+│   │   ├── init_meter.ts           # Anchor TS клиент: initialize
+│   │   ├── sync_meter.sh           # Bash-обёртка: отправка показаний в контракт
+│   │   ├── update_meter.ts         # Anchor TS клиент: update_meter_data
+│   │   └── send_raw_instruction.ts # Отправка raw instruction через RPC
+│   ├── anchor-contract/
+│   │   ├── Anchor.toml             # Конфигурация Anchor (program ID, cluster)
+│   │   ├── programs/
+│   │   │   └── energy_meter/
+│   │   │       ├── Cargo.toml      # Rust зависимости (anchor-lang 0.30, anchor-spl)
+│   │   │       └── src/
+│   │   │           └── lib.rs      # Смарт-контракт: 5 инструкций, 2 аккаунта, 8 ошибок
+│   │   └── tests/
+│   │       └── energy_meter.ts     # Тесты контракта (ts-mocha)
+│   ├── package.json                # Node зависимости для скриптов
+│   └── tsconfig.json
+│
+└── frontend/
+    └── propchain/
+        ├── app/
+        │   ├── layout.js           # Root layout с WalletProvider
+        │   ├── page.js             # Главная страница → Dashboard
+        │   └── globals.css         # Глобальные стили
+        ├── components/
+        │   ├── Dashboard.jsx       # Основной UI: авторизация, арендатор, инвестор
+        │   └── WalletProvider.jsx  # Solana Wallet Adapter провайдер (Phantom)
+        ├── lib/
+        │   ├── program.js          # Anchor клиент: PDA, fetch, payUtilities, хелперы
+        │   └── idl/
+        │       └── energy_meter.json  # IDL контракта для Anchor JS
+        ├── .env.local.example      # Шаблон переменных окружения
+        ├── next.config.mjs         # Конфиг Next.js 16 (Turbopack + webpack fallbacks)
+        └── package.json
 ```
 
 ---
 
-## ⚡ Почему Solana и Token-2022?
+## Требования
 
-### Технические преимущества Solana
+### Обязательные
 
-| Метрика | Solana | Ethereum | Polygon |
-|---|---|---|---|
-| TPS | ~65,000 | ~15–30 | ~7,000 |
-| Время финализации | ~400ms | ~12–15 сек | ~2–3 сек |
-| Комиссия за транзакцию | ~$0.00025 | $1–50+ | $0.01–0.1 |
-| Стоимость хранения аккаунта | ~0.002 SOL | — | — |
+| Инструмент | Версия | Назначение |
+|------------|--------|------------|
+| **Node.js** | >= 18 | Фронтенд, Anchor TS клиент |
+| **npm** | >= 9 | Менеджер пакетов |
+| **Rust** | >= 1.70 | Компиляция Anchor контракта |
+| **Anchor CLI** | 0.30.x | Сборка и деплой контракта |
+| **Solana CLI** | >= 1.17 | Работа с кластером, keypair, airdrop |
 
-Для маркетплейса с тысячами P2P-транзакций в день комиссии Ethereum делают бизнес-модель нежизнеспособной. Solana устраняет этот барьер полностью.
+### Для C++ эмулятора
 
-### Почему Token-2022, а не SPL Token?
+| Инструмент | Версия | Назначение |
+|------------|--------|------------|
+| **CMake** | >= 3.16 | Система сборки |
+| **g++ / clang++** | C++17 | Компилятор |
+| **nlohmann/json** | >= 3.11 | JSON (скачается автоматически через FetchContent) |
+| **libcurl** (опционально) | — | JSON-RPC transport (без неё — только CLI bridge) |
 
-Классический SPL Token — примитивный стандарт без встроенной поддержки compliance-требований, критически важных для RWA. Token-2022 решает это нативно:
+### Для фронтенда
 
-- **MetadataPointer** позволяет хранить on-chain метаданные без внешних программ (Metaplex не нужен для базовых RWA)
-- **PermanentDelegate** — эмитент может принудительно перевести токен в случае судебного решения или регуляторного требования (аналог "freeze" в TradFi)
-- **TransferHook** — перед каждым трансфером вызывается кастомная программа: проверка KYC статуса покупателя, whitelist юрисдикций, лимиты на объём
-- **InterestBearingMint** — on-chain начисление процентов для токенизированных долговых инструментов без внешних оракулов
-
-Эти расширения делают Token-2022 первым стандартом токенов, **нативно приспособленным** к требованиям финансовой регуляции.
+| Инструмент | Версия | Назначение |
+|------------|--------|------------|
+| **Phantom Wallet** | — | Браузерное расширение для подписи транзакций |
 
 ---
 
-## 🚀 Установка и локальная разработка
+## Установка и запуск
 
-### Предварительные требования
+### 1. Solana Validator (localnet)
 
-- [Rust](https://www.rust-lang.org/tools/install) >= 1.75
-- [Solana CLI](https://docs.solana.com/cli/install-solana-cli-tools) >= 1.18
-- [Anchor CLI](https://www.anchor-lang.com/docs/installation) >= 0.30
-- [Node.js](https://nodejs.org/) >= 20.x
-- [Pinata](https://pinata.cloud/) API Key (для IPFS)
-
-### 1. Клонирование репозитория
+Для локальной разработки запустите собственный валидатор:
 
 ```bash
-git clone https://github.com/your-username/solana-rwa-hub.git
-cd solana-rwa-hub
+# Генерация keypair (если нет)
+solana-keygen new --outfile ~/.config/solana/id.json
+
+# Переключение на localnet
+solana config set --url http://127.0.0.1:8899
+
+# Запуск валидатора в отдельном терминале
+solana-test-validator
+
+# Пополнение баланса
+solana airdrop 10
 ```
 
-### 2. Настройка Solana CLI
+### 2. Anchor контракт
 
 ```bash
-# Переключиться на Devnet
-solana config set --url devnet
+cd backend/anchor-contract
 
-# Создать/импортировать кошелёк разработчика
-solana-keygen new --outfile ~/.config/solana/devnet.json
-solana config set --keypair ~/.config/solana/devnet.json
-
-# Получить тестовые SOL
-solana airdrop 4
-solana balance
-```
-
-### 3. Сборка и деплой Anchor-программы
-
-```bash
-cd anchor
-
-# Установить зависимости Rust/Anchor
+# Сборка контракта (генерирует IDL + .so)
 anchor build
 
-# Получить Program ID после сборки
-solana address -k target/deploy/solana_rwa_hub-keypair.json
-
-# Обновить Program ID в lib.rs и Anchor.toml
-# declare_id!("ВАШ_PROGRAM_ID");
-
-# Повторная сборка с актуальным ID
-anchor build
-
-# Деплой на Devnet
-anchor deploy --provider.cluster devnet
+# Деплой на localnet
+anchor deploy
 
 # Запуск тестов
-anchor test --skip-local-validator
+anchor test
 ```
 
-### 4. Настройка Frontend
+После деплоя скопируйте Program ID из вывода. Если он отличается от `EMtr1111111111111111111111111111111111111111`, обновите:
+- `Anchor.toml` → `[programs.localnet]`
+- `lib.rs` → `declare_id!(...)`
+- `.env.local` → `NEXT_PUBLIC_PROGRAM_ID`
+
+#### Инициализация системы
+
+После деплоя нужно создать `GlobalConfig` и хотя бы одну квартиру. Это можно сделать через тесты или вручную:
 
 ```bash
-cd ../frontend
+cd backend
 
-# Установить зависимости
+# Установка зависимостей для TS-скриптов
 npm install
 
-# Создать файл переменных окружения
-cp .env.example .env.local
+# Инициализация счётчика (создание PDA квартиры)
+npx ts-node scripts/init_meter.ts APT-42-7F \
+    ~/.config/solana/id.json \
+    EMtr1111111111111111111111111111111111111111 \
+    http://127.0.0.1:8899
 ```
 
-Заполнить `.env.local`:
-
-```env
-# Solana
-NEXT_PUBLIC_SOLANA_NETWORK=devnet
-NEXT_PUBLIC_RPC_ENDPOINT=https://api.devnet.solana.com
-NEXT_PUBLIC_PROGRAM_ID=ВАШ_PROGRAM_ID
-
-# Pinata IPFS
-PINATA_API_KEY=ваш_api_key
-PINATA_SECRET_API_KEY=ваш_secret_key
-NEXT_PUBLIC_IPFS_GATEWAY=https://gateway.pinata.cloud/ipfs/
-```
+### 3. C++ эмулятор
 
 ```bash
-# Запустить в режиме разработки
+cd backend
+
+# Сборка через CMake
+mkdir -p build && cd build
+cmake ..
+make
+
+# Запуск (реальная синхронизация с блокчейном)
+./smart_meter \
+    --device-id APT-42-7F \
+    --interval 10 \
+    --rpc http://127.0.0.1:8899 \
+    --keypair ~/.config/solana/id.json \
+    --program-id EMtr1111111111111111111111111111111111111111
+
+# Или сухой запуск (без блокчейн-транзакций)
+./smart_meter --dry-run
+```
+
+#### Параметры CLI
+
+| Флаг | По умолчанию | Описание |
+|------|-------------|----------|
+| `--device-id` | `APT-42-7F` | ID счётчика (совпадает с PDA seed) |
+| `--interval` | `10` | Интервал синхронизации с блокчейном (сек) |
+| `--rpc` | `http://127.0.0.1:8899` | Solana RPC endpoint |
+| `--keypair` | `~/.config/solana/id.json` | Путь к Oracle keypair |
+| `--program-id` | `EMtr111...` | ID деплоенного контракта |
+| `--base-load` | `1500` | Базовая нагрузка в ваттах |
+| `--dry-run` | `false` | Отключить реальные транзакции |
+
+#### Альтернативная сборка (без CMake)
+
+```bash
+g++ -std=c++17 -Iinclude -o smart_meter src/main.cpp src/smart_meter.cpp
+```
+
+### 4. Next.js фронтенд
+
+```bash
+cd frontend/propchain
+
+# Установка зависимостей
+npm install
+
+# Настройка окружения
+cp .env.local.example .env.local
+# Отредактируйте .env.local при необходимости
+
+# Запуск dev-сервера
 npm run dev
 ```
 
-Открыть в браузере: [http://localhost:3000](http://localhost:3000)
+Откройте http://localhost:3000 в браузере с установленным Phantom Wallet.
 
-### 5. Структура проекта
+#### Production сборка
 
-```
-solana-rwa-hub/
-├── anchor/                    # Rust / Anchor смарт-контракт
-│   ├── programs/
-│   │   └── solana_rwa_hub/
-│   │       └── src/
-│   │           ├── lib.rs            # Точка входа программы
-│   │           ├── instructions/
-│   │           │   ├── initialize_asset.rs
-│   │           │   ├── mint_fractions.rs
-│   │           │   ├── list_asset.rs
-│   │           │   └── buy_asset.rs
-│   │           ├── state/
-│   │           │   ├── asset_vault.rs
-│   │           │   └── listing.rs
-│   │           └── errors.rs
-│   ├── tests/
-│   │   └── solana_rwa_hub.ts  # Интеграционные тесты
-│   └── Anchor.toml
-│
-└── frontend/                  # Next.js App
-    ├── app/
-    ├── components/
-    ├── lib/
-    └── package.json
+```bash
+npm run build
+npm start
 ```
 
 ---
 
-## 🗺️ Дорожная карта
+## Смарт-контракт
 
-### v1.0 — MVP (текущий релиз, Devnet)
-- [x] RWA Constructor: минтинг фракций с Token-2022
-- [x] Proof-of-Asset: привязка on-chain токена к IPFS-документам
-- [x] P2P Marketplace: эскроу-торговля фракциями
-- [x] Dashboard: портфель инвестора и управление активами
+### Инструкции
 
-### v1.1 — Yield & Income Distribution *(Q3 2026)*
-- [ ] On-chain распределение дохода (аренда, дивиденды) между держателями фракций
-- [ ] Автоматический пропорциональный сплит через Token-2022 `InterestBearingMint`
-- [ ] История выплат and yield-аналитика в Dashboard
+| Инструкция | Кто вызывает | Описание |
+|------------|-------------|----------|
+| `initialize_config` | Admin | Создание `GlobalConfig`: тариф, oracle pubkey, USDC mint, service vault |
+| `update_tariff` | Admin | Обновление тарифа без переинициализации |
+| `initialize_apartment` | Admin | Создание PDA квартиры: device_id, owner, tenant |
+| `record_consumption` | Oracle (C++) | Запись потребления: `accumulated_power += amount`, пересчёт долга |
+| `pay_utilities` | Tenant | Оплата USDC: 95% → owner, 5% → service vault |
 
-### v1.2 — DAO Asset Governance *(Q4 2026)*
-- [ ] DAO-голосование для совладельцев: одобрение сделок по активу, выбор управляющей компании
-- [ ] On-chain предложения (Proposals) с весом голоса = количество фракций
-- [ ] Интеграция с SPL Governance
+### Аккаунты (PDA)
 
-### v2.0 — Compliance & Mainnet *(Q1 2027)*
-- [ ] TransferHook с on-chain KYC/AML проверками (интеграция с верифицированными провайдерами)
-- [ ] Whitelist-режим для институциональных инвесторов
-- [ ] Оракул для привязки цены фракции к оценке реального актива (Pyth Network)
-- [ ] Деплой на Solana Mainnet-Beta
+#### GlobalConfig
+
+```
+Seeds: ["global_config"]
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `admin` | Pubkey | Администратор |
+| `oracle` | Pubkey | Oracle (C++ счётчик) |
+| `tariff_usdc_per_power` | u64 | Цена за 1 POWER в USDC (6 decimals) |
+| `usdc_mint` | Pubkey | Адрес USDC mint |
+| `service_vault` | Pubkey | Сервисный USDC-кошелёк (5% комиссия) |
+| `bump` | u8 | PDA bump |
+
+#### Apartment
+
+```
+Seeds: ["apartment", device_id.as_bytes()]
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `device_id` | String | ID счётчика (= C++ `--device-id`) |
+| `owner_pubkey` | Pubkey | Инвестор — получает 95% |
+| `tenant_pubkey` | Pubkey | Арендатор — оплачивает КУ |
+| `accumulated_power` | u64 | Суммарное потребление (единицы POWER) |
+| `unpaid_balance_usdc` | u64 | Неоплаченный долг (USDC, 6 decimals) |
+| `bump` | u8 | PDA bump |
+
+### Коды ошибок
+
+| Код | Имя | Описание |
+|-----|-----|----------|
+| 6000 | `Unauthorized` | Только admin может выполнить действие |
+| 6001 | `UnauthorizedOracle` | Только авторизованный Oracle может записывать потребление |
+| 6002 | `NotTenant` | Только арендатор может оплачивать |
+| 6003 | `OverPayment` | Сумма оплаты превышает долг |
+| 6004 | `ZeroConsumption` | Нулевое потребление |
+| 6005 | `ZeroPayment` | Нулевая оплата |
+| 6006 | `Overflow` | Арифметическое переполнение |
+| 6007 | `TokenAccountMismatch` | Несоответствие владельца token account |
 
 ---
 
-## 📄 Лицензия
+## C++ эмулятор (подробно)
 
-MIT License — см. файл [LICENSE](./LICENSE)
+### Класс SmartMeter
+
+Эмулирует физический счётчик электроэнергии:
+
+- **Симуляция**: каждый тик (1 сек) генерирует потребление по нормальному распределению `N(base_load, 15%)` с 5% вероятностью пиковой нагрузки (×1.8).
+- **Накопление**: `E = P × t / 3_600_000` кВт·ч за тик.
+- **Blockchain bridge**: два режима:
+  - **CLI bridge** (production): вызывает `sync_meter.sh` → `update_meter.ts` → Anchor RPC.
+  - **JSON-RPC** (demo): формирует JSON payload для `simulateTransaction` (без подписи).
+
+### Структуры данных
+
+```cpp
+struct MeterReading {
+    string   device_id;       // "APT-42-7F"
+    double   kwh;             // Человекочитаемые кВт·ч
+    uint64_t micro_wh;        // µWh для контракта (1 kWh = 1e9 µWh)
+    int64_t  timestamp_unix;  // Unix timestamp
+};
+
+struct BlockchainConfig {
+    string rpc_url;           // "http://127.0.0.1:8899"
+    string program_id;        // Program ID контракта
+    string keypair_path;      // Путь к Oracle keypair
+    string apartment_pda;     // PDA квартиры (вычисляется автоматически)
+    bool   use_cli_bridge;    // true = реальные транзакции
+};
+```
 
 ---
 
-## 👥 Команда
+## Фронтенд (подробно)
 
-Разработано для **National Solana Hackathon by Decentrathon** — Case 1: RWA Tokenization.
+### Технологии
+
+- **Next.js 16** (Turbopack) + React 19
+- **@solana/wallet-adapter** — подключение Phantom Wallet
+- **@coral-xyz/anchor** — чтение PDA аккаунтов и отправка транзакций
+- **@solana/spl-token** — работа с USDC (Associated Token Accounts)
+
+### Компоненты
+
+| Файл | Описание |
+|------|----------|
+| `WalletProvider.jsx` | Обёртка ConnectionProvider + WalletProvider + WalletModalProvider |
+| `Dashboard.jsx` | Основной интерфейс: экран входа, вид арендатора, вид инвестора |
+| `lib/program.js` | Anchor клиент: PDA-деривация, fetchGlobalConfig, fetchApartment, payUtilities |
+
+### Экран арендатора
+
+- Подключение Phantom Wallet → выбор роли "Арендатор"
+- Чтение `Apartment` PDA каждые 10 секунд → актуальные показания счётчика
+- Отображение долга (рассчитанного контрактом)
+- Кнопка "Оплатить" → подписание транзакции `pay_utilities` в Phantom
+- On-chain информация: Program ID, device ID, accumulated power, tariff
+
+### Экран инвестора
+
+- Чтение всех `Apartment` аккаунтов через `program.account.apartment.all()`
+- Агрегированная статистика: суммарное потребление, загрузка, невыплаченный долг
+- Список всех квартир с данными по каждой
+- Управление арендаторами (локальное + on-chain из PDA)
+
+### Fallback-режим
+
+Если аккаунты не найдены (контракт не задеплоен / не инициализирован), Dashboard показывает:
+- Предупреждение "Аккаунт не найден — используются демо-данные"
+- Моковые графики истории потребления
+- Корректно работает без блокчейна для демонстрации UI
 
 ---
 
-<div align="center">
+## Переменные окружения
 
-**Solana RWA Hub** — открывая реальные активы для каждого.
+### Frontend (`frontend/propchain/.env.local`)
 
-[![Built with ❤️ on Solana](https://img.shields.io/badge/Built%20with%20%E2%9D%A4%EF%B8%8F%20on-Solana-9945FF)](https://solana.com)
+| Переменная | По умолчанию | Описание |
+|------------|-------------|----------|
+| `NEXT_PUBLIC_SOLANA_NETWORK` | `devnet` | Сеть: `devnet`, `mainnet-beta`, или любая |
+| `NEXT_PUBLIC_SOLANA_RPC_URL` | (clusterApiUrl) | Кастомный RPC URL (например, `http://127.0.0.1:8899`) |
+| `NEXT_PUBLIC_PROGRAM_ID` | `EMtr111...` | Program ID деплоенного контракта |
+| `NEXT_PUBLIC_DEVICE_ID` | `APT-42-7F` | Device ID по умолчанию |
 
-</div>
+---
+
+## Типичные сценарии
+
+### Полный запуск на localnet
+
+```bash
+# Терминал 1: Solana validator
+solana-test-validator
+
+# Терминал 2: Деплой контракта
+cd backend/anchor-contract
+anchor build && anchor deploy
+
+# Терминал 3: C++ эмулятор
+cd backend/build
+./smart_meter --device-id APT-42-7F --interval 10
+
+# Терминал 4: Фронтенд
+cd frontend/propchain
+npm run dev
+```
+
+### Демо без блокчейна
+
+```bash
+# C++ эмулятор в dry-run режиме
+./smart_meter --dry-run
+
+# Фронтенд работает с моковыми данными
+cd frontend/propchain && npm run dev
+```
+
+### Подключение к devnet
+
+```bash
+# 1. Задеплоить контракт на devnet
+solana config set --url https://api.devnet.solana.com
+cd backend/anchor-contract
+anchor build && anchor deploy
+
+# 2. Обновить Program ID во фронтенде
+# frontend/propchain/.env.local:
+# NEXT_PUBLIC_SOLANA_NETWORK=devnet
+# NEXT_PUBLIC_PROGRAM_ID=<новый program id>
+
+# 3. Запустить фронтенд
+cd frontend/propchain && npm run dev
+```
+
+---
+
+## Лицензия
+
+MIT
