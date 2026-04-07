@@ -11,6 +11,10 @@
 #include <sstream>
 #include <stdexcept>
 
+#ifdef HAS_LIBCURL
+#include <curl/curl.h>
+#endif
+
 using json = nlohmann::json;
 using Clock = std::chrono::system_clock;
 
@@ -110,8 +114,7 @@ bool SmartMeter::syncWithBlockchain()
     if (config_.use_cli_bridge) {
         return execCli(buildUpdateCliCommand());
     }
-    // Fallback: unsigned JSON-RPC demo (will be rejected by validators in
-    // production but useful for local testing / log inspection).
+    // Fallback: JSON-RPC via libcurl (sends the raw instruction payload).
     return sendJsonRpc(buildJsonRpcPayload());
 }
 
@@ -119,20 +122,17 @@ bool SmartMeter::syncWithBlockchain()
 // Blockchain — CLI bridge (MVP approach)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// For a production MVP the simplest path that actually *signs* transactions
-// is shelling out to `solana program invoke` or a thin Anchor TS client.
-// Below we invoke an Anchor-compatible CLI wrapper script.
+// The C++ emulator shells out to a TS helper that signs and sends the tx.
+// This is the most practical approach without pulling in ed25519/libsodium.
 //
-// The call structure mirrors:
-//   anchor run update -- --device-id <id> --energy <micro_wh>
+// Flow:
+//   C++ → bash sync_meter.sh → ts-node update_meter.ts → Solana RPC
 //
-// For convenience we provide two modes:
-//   1) A `solana` CLI command that sends a raw instruction.
-//   2) A helper script `sync_meter.sh` (shipped alongside).
+// The Oracle keypair file is passed through; the TS script signs the tx.
+// The contract verifies: signer == global_config.oracle (UnauthorizedOracle).
 
 std::string SmartMeter::shellEscape(const std::string& arg)
 {
-    // Wrap in single quotes; escape embedded single quotes: ' → '\''
     std::string escaped = "'";
     for (char c : arg) {
         if (c == '\'') {
@@ -147,7 +147,6 @@ std::string SmartMeter::shellEscape(const std::string& arg)
 
 std::string SmartMeter::buildInitCliCommand() const
 {
-    // Uses a helper script that wraps `anchor` or `solana` CLI.
     std::ostringstream cmd;
     cmd << "bash ./scripts/init_meter.sh"
         << " --device-id "   << shellEscape(device_id_)
@@ -201,41 +200,68 @@ bool SmartMeter::execCli(const std::string& cmd) const
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Blockchain — raw JSON-RPC (demo / logging only)
+// Blockchain — raw JSON-RPC via libcurl
 // ═══════════════════════════════════════════════════════════════════════════
+//
+// Anchor instruction layout for `record_consumption(amount: u64)`:
+//
+//   ┌──────────────────────┬──────────────────┐
+//   │ 8 bytes discriminator│ 8 bytes u64 LE   │
+//   │ SHA256("global:      │ amount           │
+//   │  record_consumption")│                  │
+//   │  [0..8]              │                  │
+//   └──────────────────────┴──────────────────┘
+//
+// Pre-computed discriminator (SHA-256 of "global:record_consumption"):
+//   First 8 bytes in hex: compute at build time with:
+//     echo -n "global:record_consumption" | sha256sum | head -c 16
+//
+// Accounts (in order):
+//   0. apartment PDA   — writable, not signer
+//   1. global_config   — readonly, not signer
+//   2. oracle          — readonly, signer
+//
+// NOTE: Without ed25519 signing in C++ (would need libsodium), this path
+// builds the *unsigned* instruction data for inspection / simulation.
+// For real signed transactions, the CLI bridge path is used.
 
 std::string SmartMeter::buildJsonRpcPayload() const
 {
-    // Build a `sendTransaction`-style JSON body.
-    // NOTE: Without ed25519 signing in C++ this is illustrative.
-    //       The payload shows exactly what the RPC node expects.
-
     const uint64_t micro_wh = currentMicroWh();
 
-    // Anchor discriminator for `update_meter_data` = sha256("global:update_meter_data")[0..8]
-    // Pre-computed: [0x5f, 0xc4, 0xb2, 0x1a, 0x03, 0xe2, 0xd1, 0x7b]  (example)
+    // Instruction data: discriminator + u64 LE
+    // The discriminator is the first 8 bytes of SHA-256("global:record_consumption")
+    // Pre-computed hex (replace after `anchor build` confirms):
+    //   echo -n "global:record_consumption" | sha256sum
     //
-    // Instruction data layout (little-endian):
-    //   [8 bytes discriminator] [8 bytes u64 energy_micro_wh]
+    // For demonstration, we encode the amount as a little-endian hex string.
+    // A production C++ build would use libsodium for ed25519 signing.
+
+    // Encode u64 as little-endian hex
+    std::ostringstream energy_hex;
+    for (int i = 0; i < 8; ++i) {
+        energy_hex << std::hex << std::setfill('0') << std::setw(2)
+                   << ((micro_wh >> (i * 8)) & 0xFF);
+    }
 
     json rpc_body = {
         {"jsonrpc", "2.0"},
         {"id",      1},
         {"method",  "simulateTransaction"},
         {"params",  json::array({
-            // In a real implementation, this would be a base64-encoded
-            // signed transaction.  For the demo we send a human-readable
-            // placeholder so the RPC at least logs the attempt.
             json::object({
-                {"_note",          "unsigned demo payload — use CLI bridge for real txns"},
+                {"_note",          "unsigned demo — use CLI bridge for signed txns"},
                 {"program_id",     config_.program_id},
-                {"instruction",    "update_meter_data"},
+                {"instruction",    "record_consumption"},
+                {"discriminator",  "SHA256('global:record_consumption')[0..8]"},
                 {"accounts", json::array({
                     {{"pubkey", config_.apartment_pda}, {"isSigner", false}, {"isWritable", true}},
-                    {{"pubkey", "AUTHORITY_PUBKEY"},    {"isSigner", true},  {"isWritable", false}},
+                    {{"pubkey", "GLOBAL_CONFIG_PDA"},   {"isSigner", false}, {"isWritable", false}},
+                    {{"pubkey", "ORACLE_PUBKEY"},        {"isSigner", true},  {"isWritable", false}},
                 })},
                 {"data", {
-                    {"energy_micro_wh", micro_wh},
+                    {"amount_micro_wh", micro_wh},
+                    {"amount_hex_le",   energy_hex.str()},
                 }},
             }),
             json::object({
@@ -247,18 +273,23 @@ std::string SmartMeter::buildJsonRpcPayload() const
     return rpc_body.dump(2);
 }
 
+// libcurl callback for capturing response
+#ifdef HAS_LIBCURL
+static size_t curl_write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+    auto* response = static_cast<std::string*>(userdata);
+    response->append(ptr, size * nmemb);
+    return size * nmemb;
+}
+#endif
+
 bool SmartMeter::sendJsonRpc(const std::string& payload) const
 {
-    // ── libcurl path (compile with -lcurl) ──────────────────────────────
-    //
-    // If libcurl is available, we use it.  Otherwise fall back to
-    // printing the payload (useful for dry-run / unit tests).
-
 #ifdef HAS_LIBCURL
-    #include <curl/curl.h>
-
     CURL* curl = curl_easy_init();
     if (!curl) return false;
+
+    std::string response;
 
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -268,6 +299,9 @@ bool SmartMeter::sendJsonRpc(const std::string& payload) const
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS,      payload.c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
                      static_cast<curl_off_t>(payload.size()));
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,   curl_write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA,       &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT,         10L);
 
     CURLcode res = curl_easy_perform(curl);
     curl_slist_free_all(headers);
@@ -277,6 +311,8 @@ bool SmartMeter::sendJsonRpc(const std::string& payload) const
         std::cerr << "[CURL] " << curl_easy_strerror(res) << "\n";
         return false;
     }
+
+    std::cout << "[JSON-RPC response] " << response << "\n";
     return true;
 
 #else

@@ -2,6 +2,8 @@
 #
 # sync_meter.sh — bridge between the C++ emulator and the Anchor program.
 #
+# Calls `record_consumption` on-chain via the Oracle keypair.
+#
 # Usage:
 #   bash sync_meter.sh \
 #       --device-id APT-42-7F \
@@ -29,51 +31,28 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Derive the PDA for this device.
-# In production, use `anchor` or a helper to derive deterministically.
-# For the MVP we assume the PDA was already created via init_meter.sh.
-
 echo "┌─ sync_meter.sh ─────────────────────────────"
 echo "│ device  : ${DEVICE_ID}"
-echo "│ energy  : ${ENERGY} µWh"
+echo "│ energy  : ${ENERGY} (POWER units)"
 echo "│ program : ${PROGRAM_ID}"
 echo "│ rpc     : ${RPC_URL}"
 echo "└──────────────────────────────────────────────"
 
 # Option A: Use Anchor TS client via npx (most robust).
-# Requires: `anchor-contract/` with built IDL.
 if command -v npx &>/dev/null && [ -f "./anchor-contract/target/idl/energy_meter.json" ]; then
-    echo "[sync] Using Anchor TS client..."
+    echo "[sync] Using Anchor TS client (update_meter.ts → record_consumption)..."
     npx ts-node ./scripts/update_meter.ts \
         "${DEVICE_ID}" "${ENERGY}" "${KEYPAIR}" "${PROGRAM_ID}" "${RPC_URL}"
     exit $?
 fi
 
-# Option B: Use `solana` CLI to send a raw instruction.
-if command -v solana &>/dev/null; then
-    echo "[sync] Using solana CLI..."
-
-    # Compute Anchor instruction discriminator + data.
-    # Discriminator for "update_meter_data":
-    #   sha256("global:update_meter_data")[0..8] → hex
-    # We pipe the u64 energy as little-endian bytes after it.
-    DISC_HEX="5fc4b21a03e2d17b"
-
-    # Convert energy (u64) to 8 little-endian hex bytes.
-    ENERGY_HEX=$(printf '%016x' "${ENERGY}" | \
-        sed 's/\(..\)/\1\n/g' | tac | tr -d '\n')
-
-    INSTRUCTION_DATA="${DISC_HEX}${ENERGY_HEX}"
-
-    # NOTE: `solana program invoke` is not a real subcommand.
-    # The actual invocation requires building a full transaction.
-    # This placeholder shows the data that *would* be sent.
-    echo "[sync] Instruction data (hex): ${INSTRUCTION_DATA}"
-    echo "[sync] TODO: Wrap in a Transaction, sign, and send via RPC."
-    echo "[sync] For now, use the Anchor TS client (Option A) for full e2e."
-    exit 0
+# Option B: Raw instruction via TS (no IDL needed).
+if command -v npx &>/dev/null; then
+    echo "[sync] IDL not found. Using raw instruction (send_raw_instruction.ts)..."
+    npx ts-node ./scripts/send_raw_instruction.ts \
+        "${DEVICE_ID}" "${ENERGY}" "${KEYPAIR}" "${PROGRAM_ID}" "${RPC_URL}"
+    exit $?
 fi
 
-echo "[ERROR] Neither 'npx' (with Anchor IDL) nor 'solana' CLI found."
-echo "        Install Solana CLI tools or build the Anchor project first."
+echo "[ERROR] 'npx' not found. Install Node.js to use the TS bridge scripts."
 exit 1

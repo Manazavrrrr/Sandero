@@ -1,14 +1,16 @@
 {
   "name": "smart-meter-solana",
   "version": "1.0.0",
-  "description": "Smart meter emulator with Solana blockchain integration",
+  "description": "Smart meter emulator with Solana blockchain integration — Tokenized Housing",
   "scripts": {
+    "setup-devnet": "ts-node scripts/setup_devnet.ts",
     "init-meter": "ts-node scripts/init_meter.ts",
     "update-meter": "ts-node scripts/update_meter.ts",
     "test": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.0",
+    "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.0"
   },
   "devDependencies": {

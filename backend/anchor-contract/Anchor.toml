@@ -1,14 +1,17 @@
 [toolchain]
 
 [features]
-resolution = true
+seeds = false
 skip-lint = false
+
+[programs.localnet]
+energy_meter = "Cafya3JiUuZ7Via65X8D69JZemzjd1PE2RjEDKha8EbW"
 
 [programs.devnet]
 energy_meter = "EMtr1111111111111111111111111111111111111111"
 
-[programs.localnet]
-energy_meter = "Cafya3JiUuZ7Via65X8D69JZemzjd1PE2RjEDKha8EbW"
+[registry]
+url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"

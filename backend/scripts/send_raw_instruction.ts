@@ -1,14 +1,19 @@
 /**
- * send_raw_instruction.ts — sends `update_meter_data` without requiring the
+ * send_raw_instruction.ts — sends `record_consumption` without requiring the
  * Anchor IDL. Used as Option B in sync_meter.sh when the IDL is not built yet.
  *
  * Constructs the transaction manually:
- *   - Anchor discriminator = SHA-256("global:update_meter_data")[0..8]
- *   - Instruction data     = [discriminator (8 bytes)] + [energy u64 LE (8 bytes)]
+ *   - Anchor discriminator = SHA-256("global:record_consumption")[0..8]
+ *   - Instruction data     = [discriminator (8 bytes)] + [amount u64 LE (8 bytes)]
+ *
+ * Accounts (in order):
+ *   0. apartment   PDA  [writable]
+ *   1. globalConfig PDA  [readonly]
+ *   2. oracle       Signer [readonly]
  *
  * Usage (called by sync_meter.sh):
  *   npx ts-node scripts/send_raw_instruction.ts \
- *       <device_id> <energy_micro_wh> <keypair_path> <program_id> <rpc_url>
+ *       <device_id> <amount> <keypair_path> <program_id> <rpc_url>
  */
 
 import {
@@ -29,59 +34,66 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function main() {
-    const [, , deviceId, energyStr, keypairPath, programIdStr, rpcUrl] =
+    const [, , deviceId, amountStr, keypairPath, programIdStr, rpcUrl] =
         process.argv;
 
-    if (!deviceId || !energyStr || !keypairPath || !programIdStr || !rpcUrl) {
+    if (!deviceId || !amountStr || !keypairPath || !programIdStr || !rpcUrl) {
         console.error(
-            "Usage: send_raw_instruction.ts <device_id> <energy> <keypair_path> <program_id> <rpc_url>"
+            "Usage: send_raw_instruction.ts <device_id> <amount> <keypair_path> <program_id> <rpc_url>"
         );
         process.exit(1);
     }
 
-    const energy = BigInt(energyStr);
+    const amount = BigInt(amountStr);
     const programId = new PublicKey(programIdStr);
 
-    // Load keypair.
+    // Load oracle keypair.
     let raw: number[];
     try {
         raw = JSON.parse(fs.readFileSync(keypairPath, "utf-8")) as number[];
     } catch (err) {
         console.error(`[ERROR] Cannot read keypair at ${keypairPath}:`, err);
         process.exit(1);
-        throw err; // unreachable — tells TypeScript this branch always exits
+        throw err;
     }
-    const payer = Keypair.fromSecretKey(Uint8Array.from(raw));
+    const oracle = Keypair.fromSecretKey(Uint8Array.from(raw));
 
     const connection = new Connection(rpcUrl, "confirmed");
 
-    // Derive PDA — same seeds as Rust contract.
+    // Derive PDAs — same seeds as Rust contract.
     const [apartmentPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("apartment"), Buffer.from(deviceId)],
         programId
     );
 
-    console.log(`  PDA    : ${apartmentPda.toBase58()}`);
-    console.log(`  Energy : ${energy.toString()} µWh`);
+    const [globalConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("global_config")],
+        programId
+    );
 
-    // Anchor discriminator = first 8 bytes of SHA-256("global:update_meter_data").
+    console.log(`  Apartment PDA : ${apartmentPda.toBase58()}`);
+    console.log(`  GlobalConfig  : ${globalConfigPda.toBase58()}`);
+    console.log(`  Amount        : ${amount.toString()} POWER`);
+
+    // Anchor discriminator = first 8 bytes of SHA-256("global:record_consumption").
     const discriminator = crypto
         .createHash("sha256")
-        .update("global:update_meter_data")
+        .update("global:record_consumption")
         .digest()
         .slice(0, 8);
 
     // u64 little-endian.
-    const energyBytes = Buffer.alloc(8);
-    energyBytes.writeBigUInt64LE(energy);
+    const amountBytes = Buffer.alloc(8);
+    amountBytes.writeBigUInt64LE(amount);
 
-    const data = Buffer.concat([discriminator, energyBytes]);
+    const data = Buffer.concat([discriminator, amountBytes]);
 
     const ix = new TransactionInstruction({
         programId,
         keys: [
-            { pubkey: apartmentPda, isSigner: false, isWritable: true },
-            { pubkey: payer.publicKey, isSigner: true, isWritable: false },
+            { pubkey: apartmentPda,    isSigner: false, isWritable: true  },
+            { pubkey: globalConfigPda, isSigner: false, isWritable: false },
+            { pubkey: oracle.publicKey, isSigner: true,  isWritable: false },
         ],
         data,
     });
@@ -95,10 +107,10 @@ async function main() {
 
             const tx = new Transaction({
                 recentBlockhash: blockhash,
-                feePayer: payer.publicKey,
+                feePayer: oracle.publicKey,
             });
             tx.add(ix);
-            tx.sign(payer);
+            tx.sign(oracle);
 
             const sig = await connection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: false,

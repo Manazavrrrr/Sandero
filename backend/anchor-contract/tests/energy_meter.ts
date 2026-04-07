@@ -1,7 +1,7 @@
 /**
  * energy_meter.ts — integration tests for the EnergyMeter Anchor program.
  *
- * Сценарий: Счётчик начислил -> Жилец оплатил -> Инвестор получил профит.
+ * Сценарий: Счётчик начислил -> Жилец оплатил -> Инвестор получил профит (90/10).
  *
  * Run:  cd anchor-contract && anchor test
  */
@@ -112,11 +112,13 @@ describe("energy_meter — full flow", () => {
 
     // ── 1. Initialize GlobalConfig ──────────────────────────────────────────
 
-    it("initializes global config with tariff and oracle", async () => {
+    it("initializes global config with tariff, oracle, usdc_mint, service_vault", async () => {
         await program.methods
             .initializeConfig(new BN(TARIFF), oracle.publicKey)
             .accounts({
                 globalConfig: globalConfigPda,
+                usdcMint: usdcMint,
+                serviceVault: serviceVault,
                 admin: admin.publicKey,
                 systemProgram: SystemProgram.programId,
             })
@@ -127,6 +129,14 @@ describe("energy_meter — full flow", () => {
         assert.equal(config.admin.toBase58(), admin.publicKey.toBase58());
         assert.equal(config.oracle.toBase58(), oracle.publicKey.toBase58());
         assert.equal(config.tariffUsdcPerPower.toString(), TARIFF.toString());
+        assert.equal(
+            config.usdcMint.toBase58(),
+            usdcMint.toString()
+        );
+        assert.equal(
+            config.serviceVault.toBase58(),
+            serviceVault.toString()
+        );
     });
 
     // ── 2. Initialize Apartment ─────────────────────────────────────────────
@@ -202,9 +212,9 @@ describe("energy_meter — full flow", () => {
         }
     });
 
-    // ── 4. Tenant pays utilities ────────────────────────────────────────────
+    // ── 4. Tenant pays utilities (90% owner / 10% service) ─────────────────
 
-    it("tenant pays 5 USDC — owner gets 95%, service gets 5%", async () => {
+    it("tenant pays 5 USDC — owner gets 90%, service gets 10%", async () => {
         const paymentAmount = new BN(5_000_000); // 5.00 USDC
 
         const ownerBefore = (await getAccount(provider.connection, ownerUsdc)).amount;
@@ -227,18 +237,18 @@ describe("energy_meter — full flow", () => {
         const apt = await program.account.apartment.fetch(apartmentPda);
         assert.equal(apt.unpaidBalanceUsdc.toString(), "0");
 
-        // Check owner received 95% = 4_750_000
+        // Check owner received 90% = 4_500_000
         const ownerAfter = (await getAccount(provider.connection, ownerUsdc)).amount;
         assert.equal(
             (ownerAfter - ownerBefore).toString(),
-            "4750000"
+            "4500000"
         );
 
-        // Check service vault received 5% = 250_000
+        // Check service vault received 10% = 500_000
         const serviceAfter = (await getAccount(provider.connection, serviceVault)).amount;
         assert.equal(
             (serviceAfter - serviceBefore).toString(),
-            "250000"
+            "500000"
         );
     });
 
